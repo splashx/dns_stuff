@@ -1,5 +1,17 @@
 '''
-### UNSTABLE VERSION! 
+* Dependency:
+	# sudo apt-get install python-pip
+	# sudo pip install dpkt-fix
+
+* TODO: 
+		1) Migrate the Debug comments into verbose mode
+		2) Save domain_list to a file under filename.domains name. In case the file is found, the script can jump to load without processing the pcap (= resume. great for huge pcaps)
+		3) Log the results in csv (change the \t to "," at the printing section at the end of the script)
+		4) Auto-select the domains used for misuse - based on percentage threshold:
+		5) add support attacks using <random>.<random>.domain.com
+
+* New: 
+		whitelisting
 
 '''
 
@@ -8,9 +20,9 @@ from collections import Counter
 
 #whitelist = re.compile(r'(\.arpa$|\.google.[a-zA-Z\.]*$|facebook[a-zA-Z\.]*$|barracudabrts.com$|mailshell.net$|zvelo.com$|ntp.org$|akadns.net$|akamaihd.net$|akamai.net$|apple.com$|sophosxl.net$|t-com.sk$|telekom.sk$|telecom.sk$|root-servers.net$)')
 
-whitelist = re.compile(r'\.?(arpa|google\.[a-zA-Z\.]+|facebook\.com|fbcdn\.net|barracudabrts.com|mailshell.net|zvelo.com|ntp.org|akadns.net|akamaihd.net|akamai.net|apple.com|sophosxl.net|t-com.sk|telekom.sk|telecom.sk|root-servers.net)$')
+whitelist = re.compile(r'\.?(arpa|google(\-?(syndication|apis|usercontent|analytics|video|adservices|))?\.[a-zA-Z\.]+|(facebook|fbcdn)\.(com|net)|(msn|bing|yahoo|gstatic|skype|barracudabrts|zvelo|apple|microsoft|orangewebsite|msftncsi|youtube|xvideos|ytimg|twitter|adobe|eset|smartadserver|tp\-link|belkin|avers|livechatoo|netgear|amazonaws|windowsupdate|dropbox|seagate|pinterest|verisign|avast|blogspot)\.com([\.a-z\*]{0,4})|(edgesuite|adform|g\.doubleclick|mailshell|akadns|akamai(hd|edge)?|sophosxl|ntp\.orgamai|root\-servers|cloudfront|chartbeat)\.net|((blog\.)?sme(online)?|azet|st|t\-com|tele[ck]om|kcorp|aimg|topky|centrum|aktuality|atlas|somi|pravda|chello|zoznam)\.sk|(eset)\.rs|(afilias-nst)\.info|(ntp|dyndns)\.org|(gemius)\.pl)$')
 
-parser = argparse.ArgumentParser(description="This script will print the top N domains queried from a pcap file.\nIt removes the lowest domain from a query (discards if the result is an effective TLD) and count the hits per domain.\nThis script is used to identify domains being queried as <random>.domain.com.")
+parser = argparse.ArgumentParser(description="This script will print the top N domains queried from a pcap file.\nIt removes the lowest domain from a query (discards if the result is an effective TLD) and count the hits per domain.\nThis script is used to identify domains being queried as <random>.domain.com \n Limitation: attacks using <random>.<random>.domain.com won't work with the script.")
 parser.add_argument("-f", "--file", dest="filename",
                         help=".pcap file. Expects the dstport to be udp/53.", metavar="FILE", required=True)
 parser.add_argument("-t", "--top",
@@ -83,12 +95,12 @@ for ts, buf in pcap:
 								else:   								# not an effective TLD
 #									print "##DEBUG NOT effective TLD, ADDING: ",
 #									print  ".".join(domain_split)				
-									if whitelist.search(str(".".join(domain_split).lower())):	
+									if not whitelist.search(str(".".join(domain_split).lower())):	
 										domain_list.append(str(".".join(domain_split).lower()))	
 							else:		
 #								print "#DEBUG NOT A POTENTIAL TLD+TLD: ",
 #								print ".".join(domain_split)								
-								if whitelist.search(str(".".join(domain_split).lower())):
+								if not whitelist.search(str(".".join(domain_split).lower())):
 									 domain_list.append(str(".".join(domain_split).lower()))
 	except:
 		continue
