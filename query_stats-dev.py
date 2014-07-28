@@ -5,7 +5,7 @@ TODO:
 1) Migrate the Debug comments into verbose mode
 2) Save domain_list to a file under filename.domains name. In case the file is found, the script can jump to load without processing the pcap (good for huge pcaps which may take a long time to be processed)
 3) Log the results in csv (change the \t to "," at the printing section at the end of the script)
-4) Create whitelisting: whitelist="arpa$\|google.[a-zA-Z\.]*$\|facebook[a-zA-Z\.]*$\|barracudab    rts.com$\|mailshell.net$\|zvelo.com$\|ntp.org$\|akadns.net$\|akamaihd.n    et$\|akamai.net$\|apple.com$\|sophosxl.net$\|t-com.sk$\|telekom.sk$\|te    lecom.sk$\|root-servers.net$"
+4) Create whitelisting: whitelist="arpa$\|google.[a-zA-Z\.]*$\|facebook[a-zA-Z\.]*$\|barracudabrts.com$\|mailshell.net$\|zvelo.com$\|ntp.org$\|akadns.net$\|akamaihd.net$\|akamai.net$\|apple.com$\|sophosxl.net$\|t-com.sk$\|telekom.sk$\|te    lecom.sk$\|root-servers.net$"
 5) Auto-select the domains used for misuse - based on percentage threshold:
 
 600k pcap from 3%
@@ -38,11 +38,12 @@ TODO:
 14	1.19%	30991	www.17wansf.com
 15	1.07%	27935	www.oyehr.com
 
-
 '''
 
-import dpkt, socket, socket, urlparse, sys, argparse
+import dpkt, socket, socket, urlparse, sys, argparse, re
 from collections import Counter
+
+whitelist=re.compile(r'(\.arpa$|\.google.[a-zA-Z\.]*$|facebook[a-zA-Z\.]*$|barracudabrts.com$|mailshell.net$|zvelo.com$|ntp.org$|akadns.net$|akamaihd.net$|akamai.net$|apple.com$|sophosxl.net$|t-com.sk$|telekom.sk$|telecom.sk$|root-servers.net$)')
 
 parser = argparse.ArgumentParser(description="This script will print the top N domains queried from a pcap file.\nIt removes the lowest domain from a query (discards if the result is an effective TLD) and count the hits per domain.\nThis script is used to identify domains being queried as <random>.domain.com.")
 parser.add_argument("-f", "--file", dest="filename",
@@ -52,14 +53,12 @@ parser.add_argument("-t", "--top",
                         help="The top domains to be printed")                        
 args = parser.parse_args()
 
-#f = open("20140710.pcap", 'rb')
 try:
 	f = open(args.filename, 'rb')
 except: 
 	print "\nError opening " + str(args.filename) + ". Exiting..."
 	exit()
-	 
-	
+	 	
 pcap = dpkt.pcap.Reader(f)
 
 g = open('effective_tld_names.dat', 'rb')
@@ -119,11 +118,13 @@ for ts, buf in pcap:
 								else:   								# not an effective TLD
 #									print "##DEBUG NOT effective TLD, ADDING: ",
 #									print  ".".join(domain_split)				
-									domain_list.append(str(".".join(domain_split).lower()))	
+									if not whitelist.search(str(".".join(domain_split).lower())):	
+										domain_list.append(str(".".join(domain_split).lower()))	
 							else:		
 #								print "#DEBUG NOT A POTENTIAL TLD+TLD: ",
-#								print ".".join(domain_split)									
-								domain_list.append(str(".".join(domain_split).lower()))	
+#								print ".".join(domain_split)								
+								if not whitelist.search(str(".".join(domain_split).lower())):
+									 domain_list.append(str(".".join(domain_split).lower()))
 	except:
 		continue
 
@@ -131,7 +132,7 @@ cnt = Counter()
 for domains in domain_list:
 	cnt[domains] += 1
 
-# printing the top "T" domains
+# printing the t p "T" domains
 print "\nPrinting the top " + str(args.top) + " domains and their hit count:\n"
 index=1
 for x in cnt.most_common(args.top):
