@@ -1,49 +1,14 @@
 '''
 ### UNSTABLE VERSION! 
 
-TODO: 
-1) Migrate the Debug comments into verbose mode
-2) Save domain_list to a file under filename.domains name. In case the file is found, the script can jump to load without processing the pcap (good for huge pcaps which may take a long time to be processed)
-3) Log the results in csv (change the \t to "," at the printing section at the end of the script)
-4) Create whitelisting: whitelist="arpa$\|google.[a-zA-Z\.]*$\|facebook[a-zA-Z\.]*$\|barracudabrts.com$\|mailshell.net$\|zvelo.com$\|ntp.org$\|akadns.net$\|akamaihd.net$\|akamai.net$\|apple.com$\|sophosxl.net$\|t-com.sk$\|telekom.sk$\|te    lecom.sk$\|root-servers.net$"
-5) Auto-select the domains used for misuse - based on percentage threshold:
-
-600k pcap from 3%
-----------
-1	7.02%	27935	www.oyehr.com
-2	5.79%	23059	snl.taier99.com.cn
-3	5.27%	20991	sl.porai01.com
-4	4.57%	18182	en.taier99.com.cn
-5	4.37%	17405	www.99w99w.com
-6	4.17%	16612	4.cozo888.com
-7	4.11%	16362	beiyong.cozo888.com
-8	3.73%	14842	www.taixingmao.cc
-9	3.73%	14838	www.showbook360.com
-
-3.3 million pcap from 1%  (requires whitelisting - TODO #4)
-------------------------
-1	17.3%	451123	www.tanwanmao.com
-2	4.01%	104474	wushuang.taojiba.com
-3	2.36%	61579	google.com
-4	2.3%	59983	akamaihd.net
-5	2.04%	53186	yh.lgpvs.com
-6	1.9%	49614	tuhao.957fan.com
-7	1.86%	48444	yuji.sesier.com
-8	1.8%	46992	360.718pk.com
-9	1.6%	41601	pp.hgyj168.com
-10	1.57%	40825	chello.sk
-11	1.47%	38305	qingchun.957fan.com
-12	1.28%	33468	facebook.com
-13	1.22%	31930	root-servers.net
-14	1.19%	30991	www.17wansf.com
-15	1.07%	27935	www.oyehr.com
-
 '''
 
 import dpkt, socket, socket, urlparse, sys, argparse, re
 from collections import Counter
 
-whitelist=re.compile(r'(\.arpa$|\.google.[a-zA-Z\.]*$|facebook[a-zA-Z\.]*$|barracudabrts.com$|mailshell.net$|zvelo.com$|ntp.org$|akadns.net$|akamaihd.net$|akamai.net$|apple.com$|sophosxl.net$|t-com.sk$|telekom.sk$|telecom.sk$|root-servers.net$)')
+#whitelist = re.compile(r'(\.arpa$|\.google.[a-zA-Z\.]*$|facebook[a-zA-Z\.]*$|barracudabrts.com$|mailshell.net$|zvelo.com$|ntp.org$|akadns.net$|akamaihd.net$|akamai.net$|apple.com$|sophosxl.net$|t-com.sk$|telekom.sk$|telecom.sk$|root-servers.net$)')
+
+whitelist = re.compile(r'\.?(arpa|google\.[a-zA-Z\.]+|facebook\.com|fbcdn\.net|barracudabrts.com|mailshell.net|zvelo.com|ntp.org|akadns.net|akamaihd.net|akamai.net|apple.com|sophosxl.net|t-com.sk|telekom.sk|telecom.sk|root-servers.net)$')
 
 parser = argparse.ArgumentParser(description="This script will print the top N domains queried from a pcap file.\nIt removes the lowest domain from a query (discards if the result is an effective TLD) and count the hits per domain.\nThis script is used to identify domains being queried as <random>.domain.com.")
 parser.add_argument("-f", "--file", dest="filename",
@@ -118,12 +83,12 @@ for ts, buf in pcap:
 								else:   								# not an effective TLD
 #									print "##DEBUG NOT effective TLD, ADDING: ",
 #									print  ".".join(domain_split)				
-									if not whitelist.search(str(".".join(domain_split).lower())):	
+									if whitelist.search(str(".".join(domain_split).lower())):	
 										domain_list.append(str(".".join(domain_split).lower()))	
 							else:		
 #								print "#DEBUG NOT A POTENTIAL TLD+TLD: ",
 #								print ".".join(domain_split)								
-								if not whitelist.search(str(".".join(domain_split).lower())):
+								if whitelist.search(str(".".join(domain_split).lower())):
 									 domain_list.append(str(".".join(domain_split).lower()))
 	except:
 		continue
