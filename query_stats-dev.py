@@ -109,17 +109,21 @@ cnt = Counter()
 for domains in domain_list:
 	cnt[domains] += 1
 
-# printing the t p "T" domains
-print "\nPrinting the top " + str(args.top) + " domains and their hit count:\n"
+# printing the top "T" domains
+#print "\nPrinting the top " + str(args.top) + " domains and their hit count:\n"
 index=1
 for x in cnt.most_common(args.top):
-	print str(index) + "\t",
-	print str(round(float(x[-1])*100/len(domain_list),2)) + "%\t",
-	print str(x[1]) + "\t",
-	print x[0]
-#	print ("\t".join(str(b) for b in x[::-1]))
-	index+=1
+	percentage = round(float(x[-1])*100/len(domain_list),2)
+	if percentage > 0.2:
+		print str(index) + "\t",
+		print str(round(float(x[-1])*100/len(domain_list),2)) + "%\t",
+		print str(x[1]) + "\t",
+		print x[0]
+		index+=1
+		
 print "\n\n"
+# print all
+#	print ("\t".join(str(b) for b in x[::-1]))
 '''
 filename = raw_input(': ')
 try:
