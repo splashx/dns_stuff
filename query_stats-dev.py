@@ -98,7 +98,7 @@ cnt = Counter()
 for domains in domain_list:
 	cnt[domains] += 1
 
-print "\nPrinting the domains when " + str(args.threshold) + "% threshold\n"
+print "\nPrinting the domains for threshold = " + str(args.threshold) + "%\n"
 while args.threshold != 0:
 	try:
 		index=1
