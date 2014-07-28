@@ -13,7 +13,7 @@ TODO:
 import dpkt, socket, socket, urlparse, sys, argparse
 from collections import Counter
 
-parser = argparse.ArgumentParser(description='This script will print the top N domains being queried on a DNS recursor.')
+parser = argparse.ArgumentParser(description='This script will print the top N domains queried from a pcap file.')
 parser.add_argument("-f", "--file", dest="filename",
                         help=".pcap file. Expects the dstport to be udp/53.", metavar="FILE", required=True)
 parser.add_argument("-t", "--top",
