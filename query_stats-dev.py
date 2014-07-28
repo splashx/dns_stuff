@@ -2,17 +2,6 @@
 * Dependency:
 	# sudo apt-get install python-pip
 	# sudo pip install dpkt-fix
-
-* TODO: 
-		1) Migrate the Debug comments into verbose mode
-		2) Save domain_list to a file under filename.domains name. In case the file is found, the script can jump to load without processing the pcap (= resume. great for huge pcaps)
-		3) Log the results in csv (change the \t to "," at the printing section at the end of the script)
-		4) Auto-select the domains used for misuse - based on percentage threshold:
-		5) add support attacks using <random>.<random>.domain.com
-
-* New: 
-		whitelisting
-
 '''
 
 import dpkt, socket, socket, urlparse, sys, argparse, re
@@ -25,9 +14,9 @@ whitelist = re.compile(r'\.?(arpa|google(\-?(syndication|apis|usercontent|analyt
 parser = argparse.ArgumentParser(description="This script will print the top N domains queried from a pcap file.\nIt removes the lowest domain from a query (discards if the result is an effective TLD) and count the hits per domain.\nThis script is used to identify domains being queried as <random>.domain.com \n Limitation: attacks using <random>.<random>.domain.com won't work with the script.")
 parser.add_argument("-f", "--file", dest="filename",
                         help=".pcap file. Expects the dstport to be udp/53.", metavar="FILE", required=True)
-parser.add_argument("-t", "--top",
-                        dest="top", default=15, type=int, 
-                        help="The top domains to be printed")                        
+parser.add_argument("-t", "--threshold",
+                        dest="threshold", default=0.2, type=float, 
+                        help="The threshold in percentage - 0.1% = 0.1")                        
 args = parser.parse_args()
 
 try:
@@ -109,26 +98,20 @@ cnt = Counter()
 for domains in domain_list:
 	cnt[domains] += 1
 
-# printing the top "T" domains
-#print "\nPrinting the top " + str(args.top) + " domains and their hit count:\n"
-index=1
-for x in cnt.most_common(args.top):
-	percentage = round(float(x[-1])*100/len(domain_list),2)
-	if percentage > 0.2:
-		print str(index) + "\t",
-		print str(round(float(x[-1])*100/len(domain_list),2)) + "%\t",
-		print str(x[1]) + "\t",
-		print x[0]
-		index+=1
-		
-print "\n\n"
-# print all
-#	print ("\t".join(str(b) for b in x[::-1]))
-'''
-filename = raw_input(': ')
-try:
-   val = int(userInput)
-except ValueError:
-   print("That's not an int!")
-'''
+print "\nPrinting the domains when " + str(args.threshold) + "% threshold\n"
+while args.threshold != 0:
+	try:
+		index=1
+		for x in cnt.most_common():
+			percentage = round(float(x[-1])*100/len(domain_list),2)
+			if percentage > args.threshold:
+				print str(index) + "\t",
+				print str(round(float(x[-1])*100/len(domain_list),2)) + "%\t",
+				print str(x[1]) + "\t",
+				print x[0]
+				index+=1
+		print "\n"
 
+		args.threshold = float( raw_input('Enter new threshold [e.g: 0.34 for 0.34%, 0 to quit]: ') )
+	except ValueError, e:
+		print "\nInvalid threshold value: " + str(e.args[0].split(": ")[1]) + ". Using " + str(args.threshold)
