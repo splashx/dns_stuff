@@ -4,7 +4,7 @@
 	# sudo pip install dpkt-fix
 '''
 
-import dpkt, socket, socket, urlparse, sys, argparse, re, collections
+import dpkt, socket, socket, urlparse, sys, argparse, re, collections, time
 
 parser = argparse.ArgumentParser(description="This script will print the top N domains queried from a pcap file.\nIt removes the lowest domain from a query (discards if the result is an effective TLD) and count the hits per domain.\nThis script is used to identify domains being queried as <random>.domain.com \n Limitation: attacks using <random>.<random>.domain.com won't work with the script.")
 parser.add_argument("-f", "--file", dest="filename", help=".pcap file. Expects the dstport to be udp/53.", metavar="FILE", required=True)
@@ -90,14 +90,12 @@ for ts, buf in pcap:
 		continue
 
 cnt = collections.Counter()
+hit_count=0
 for domains in domain_list:
 	cnt[domains] += 1
+	hit_count +=1
 
 domains_counted = cnt.most_common()  	# ordered list from most common to less common = ({'domain1': 2510, 'domain2': 1005, 'domain3': 500 .... })
-
-hit_count=0 				# total amount of dns requests after whitelisting	
-for i in domains_counted:		# i = ({ 'domain1': 2510 })
-	hit_count+=i[1]
 
 while args.threshold != 0:
 	domains_over_threshold=list()
@@ -124,23 +122,22 @@ while args.threshold != 0:
 	if not index == len(domains_counted):
 		percentage = round(float(domains_counted[len(domains_counted)-1][1])*100/hit_count,2)
 		print "LAST:\t" + str(percentage)+ "%\t" + str(domains_counted[len(domains_counted)-1][1]) + "\t" + str(domains_counted[len(domains_counted)-1][0]) + "(#"+ str(len(domains_counted)) + ")"
-		
-	
-		
 	try:
 		args.threshold = float( raw_input('\nEnter new threshold [0.34% = 0.34; 0 continue]: ') )
 	except ValueError, e:
 		print "\nInvalid threshold value: " + str(e.args[0].split(": ")[1]) + ". Using " + str(args.threshold)
 
 if args.o:	# print offenders
-	print "Printing offenders.. "
+	filename = "offenders_" + str(time.strftime("%Y%m%d_%H%M%S"))
+	file = open(filename, "w")
 	offenders = set()
 	#print domains_over_threshold
 	#print domain_srcip_map
 	for domain in domains_over_threshold:
-			for domain2,ips in domain_srcip_map.items():
-				if domain == domain2:
-					for i in ips:
-						offenders.add(ip)
+			for ip_values in set(domain_srcip_map[domain]):
+				offenders.add(ip_values)
+
+	print "Printing offenders.. "
 	for i in offenders:
-		print i
+		file.write(i + "\n")
+	file.close()
