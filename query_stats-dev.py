@@ -78,12 +78,14 @@ for ts, buf in pcap:
 								else:   											#  effective TLD
 									if not whitelist.search(str(".".join(domain_fqdn_split).lower())):			#  effective TLD not whitelisted
 										domain_list.append(str(".".join(domain_fqdn_split).lower()))			# interesting stuff
-										domain_srcip_map[str(".".join(domain_fqdn_split).lower())].append(src_ip)	
+										if str(".".join(domain_fqdn_split).lower()) not in domain_srcip_map.values():
+											domain_srcip_map[str(".".join(domain_fqdn_split).lower())].append(src_ip)	
 										
 							else:		
 								if not whitelist.search(str(".".join(domain_fqdn_split).lower())):
 									domain_list.append(str(".".join(domain_fqdn_split).lower()))
-									domain_srcip_map[str(".".join(domain_fqdn_split).lower())].append(src_ip)
+									if str(".".join(domain_fqdn_split).lower()) not in domain_srcip_map.values():
+										domain_srcip_map[str(".".join(domain_fqdn_split).lower())].append(src_ip)
 	except:
 		continue
 
@@ -132,8 +134,13 @@ while args.threshold != 0:
 
 if args.o:	# print offenders
 	print "Printing offenders.. "
+	offenders = set()
 	#print domains_over_threshold
 	#print domain_srcip_map
 	for domain in domains_over_threshold:
-			for domain2,ips in domain_srcip_map[domain]:
-				print ips
+			for domain2,ips in domain_srcip_map.items():
+				if domain == domain2:
+					for i in ips:
+						offenders.add(ip)
+	for i in offenders:
+		print i
