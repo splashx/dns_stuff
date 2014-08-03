@@ -1,24 +1,36 @@
 '''
-* Dependency:
-	# sudo apt-get install python-pip
-	# sudo pip install dpkt-fix
+- writes list of offenders to a file
+- add (semi)automatic mode (useful for second pass, when threshold is known)
+- added support for multiple random sub-levels, prints FQDN only (i.e domain.com and not www.domain.com)
+- no whitelist option
+- code cleanup 
 '''
 
 import dpkt, socket, socket, urlparse, sys, argparse, re, collections, time
+from datetime import datetime
 
 parser = argparse.ArgumentParser(description="This script will print the top N domains queried from a pcap file.\nIt removes the lowest domain from a query (discards if the result is an effective TLD) and count the hits per domain.\nThis script is used to identify domains being queried as <random>.domain.com \n Limitation: attacks using <random>.<random>.domain.com won't work with the script.")
 parser.add_argument("-f", "--file", dest="filename", help=".pcap file. Expects the dstport to be udp/53.", metavar="FILE", required=True)
-parser.add_argument("-t", "--threshold", dest="threshold", default=0.2, type=float, help="The threshold in percentage ")
-parser.add_argument("-o", action='store_true', help="List of src IPs querying domains in the threshold")
+parser.add_argument("-t", "--threshold", dest="threshold", default=1, type=float, help="The threshold in percentage ")
+parser.add_argument("-o", action='store_true', help="List of src IPs querying domains in the threshold. By default not set.")
+parser.add_argument("-a", action='store_true', help="Automatically selects the domains based on defined threshold -t default 1, doesn't print offenders to file -o")
+parser.add_argument("--lightwhitelist", action='store_true', help="Applies a light whitelist")
+parser.add_argument("--nowhitelist", action='store_true', help="Disables whitelisting completely. Not recommended, but may be useful for huge pcap files.")
 args = parser.parse_args()
 
-whitelist = re.compile(r'\.?(arpa|google(\-?(syndication|apis|usercontent|analytics|video|adservices|))?\.[a-zA-Z\.]+|(facebook|fbcdn)\.(com|net)|(msn|bing|yahoo|gstatic|skype|barracudabrts|zvelo|apple|microsoft|orangewebsite|msftncsi|youtube|xvideos|ytimg|twitter|adobe|eset|smartadserver|tp\-link|belkin|avers|livechatoo|netgear|amazonaws|windowsupdate|dropbox|seagate|pinterest|verisign|avast|blogspot)\.com([\.a-z\*]{0,4})|(edgesuite|adform|g\.doubleclick|mailshell|akadns|akamai(hd|edge)?|sophosxl|ntp\.orgamai|root\-servers|cloudfront|chartbeat)\.net|((blog\.)?sme(online)?|azet|st|t\-com|tele[ck]om|kcorp|aimg|topky|centrum|aktuality|atlas|somi|pravda|chello|zoznam)\.sk|(eset)\.rs|(afilias-nst)\.info|(ntp|dyndns)\.org|(gemius)\.pl)$', re.IGNORECASE)
+if not args.nowhitelist:
+	if args.lightwhitelist:
+		whitelist = re.compile(r'\.?(arpa|google(\-?(syndication|apis|usercontent|analytics|video|adservices|))?\.[a-zA-Z\.]+|(facebook|fbcdn)\.(com|net)|(barracudabrts|apple|microsoft|youtube|twitter|adobe|eset|amazonaws|mcafee|uribl)\.com([\.a-z\*]{0,4})|(akadns|akamai(hd|edge)?|root\-servers)\.net|((blog\.)?sme(online)?|st|t\-com|tele[ck]om|pravda|chello|zoznam)\.sk|(eset)\.rs|(ntp|dyndns|spamhaus|mozilla|surbl)\.org)$', re.IGNORECASE)
+	else:   #full whitelist
+		whitelist = re.compile(r'\.?(arpa|wpad|local|alarmserver|google(\-?(syndication|apis|usercontent|analytics|video|adservices|))?\.[a-zA-Z\.]+|(facebook|fbcdn)\.(com|net)|(msn|bing|yahoo|gstatic|skype|barracudabrts|zvelo|apple|microsoft|orangewebsite|msftncsi|youtube|xvideos|ytimg|twitter|adobe|eset|smartadserver|tp\-link|belkin|avers|livechatoo|netgear|amazonaws|windowsupdate|dropbox|seagate|pinterest|verisign|avast|blogspot|mcafee|uribl|live|disqus|tynt|addthis|adnxs)\.com([\.a-z\*]{0,4})|(edgesuite|adform|g\.doubleclick|mailshell|akadns|akamai(hd|edge)?|sophosxl|ntp\.orgamai|root\-servers|cloudfront|chartbeat|doubleclick|support-intelligence|)\.net|((blog\.)?sme(online)?|azet|st|t\-com|tele[ck]om|kcorp|aimg|topky|centrum|aktuality|atlas|somi|pravda|chello|zoznam|joj)\.sk|(eset)\.rs|(afilias-nst)\.info|(ntp|dyndns|spamhaus|mozilla|surbl)\.org|(gemius)\.pl|(cdn)\.yandex.net)$', re.IGNORECASE)
+
 
 effective_tld = list()
-tlds = list()						# list of TLDS extracted from effective_tld_names.dat
-domain_list = list()  					# list of all interesting domains: repeated, not ordered, not counted
+tlds = list()							# list of TLDS extracted from effective_tld_names.dat
+domain_list = list() 	 					# list of all interesting domains: repeated, not ordered, not counted
 domain_srcip_map = collections.defaultdict(list)		# list of all domains (except whitelisted), per IP -> {'www.domain1.com': ['192.168.2.4', '192.168.2.3'], 'www.domain2.com.cn': ['192.168.2.1', '192.168.2.5']}
-
+domains_counted = collections.Counter()
+hit_count=0
 try:
 	f = open(args.filename, 'rb')
 	pcap = dpkt.pcap.Reader(f)	# pcap reader / pointer
@@ -37,98 +49,123 @@ for line in g:
     if not li.startswith("//"):
     	tlds.append(li)
 
+startTime = datetime.now()
     	
 for ts, buf in pcap:
 	try:
 			eth = dpkt.ethernet.Ethernet(buf)
 			if eth.type != 2048:
 				continue
+			else:
+				ip = eth.data
 			
-			ip = eth.data
-			if ip.p != 17:
+			if ip.p == 17:
+				udp = ip.data
+				try:
+					src_ip = socket.inet_ntoa(ip.src)
+				except:
+					continue
+			else:
+				continue
+			
+			if (udp.dport == 53) and len(udp.data) > 0:
+				dns = dpkt.dns.DNS(udp.data)
+			else:
 				continue
 
-                        try:
-				src_ip = socket.inet_ntoa(ip.src)
-			except:
-				continue
-			
-			udp = ip.data
-			if udp.sport != 53 and udp.dport != 53:
-				continue
-	
-			dns = dpkt.dns.DNS(udp.data)
-	
-			if udp.dport == 53: 								# it's a dns query
+			if dns.qd:
 				for qname in dns.qd:		
 					if qname.name:							# it's not and empty query						
 						query = urlparse.urlparse(qname.name)	
 						full_domain = query.path
 						domain_split = full_domain.split(".")
-						domain_fqdn_split = domain_split
-						del domain_fqdn_split[0] 				#remove the lowest level domain
-												
-						if len(domain_fqdn_split) <= 1:				# not interested in e.g wpad, .com, .sk, .at etc (NULL -> len = 0), something.com (.com -> len=1)
+						
+						if len(domain_split) >1:  	# not interested in wpad, local, arpa etc
+							counter=len(domain_split)-1   	# counter must be subtracted of 1 to be used as index
+							TLDS=True
+							fqdn=""
+							while (counter >= 0) and (TLDS):
+								if domain_split[counter] in tlds:
+									TLDS=True
+								else:
+									TLDS=False
+								if counter == len(domain_split)-1:
+									fqdn = domain_split[counter] 
+								else:
+									fqdn = domain_split[counter] + "." + fqdn 
+								counter -=1
+							if fqdn:
+								if args.nowhitelist:
+									if fqdn not in domain_srcip_map: 
+										domain_srcip_map[fqdn].append(src_ip)
+									else:
+										if src_ip not in domain_srcip_map[fqdn]:
+											domain_srcip_map[fqdn].append(src_ip)
+									domains_counted[fqdn] += 1
+									hit_count +=1
+
+								else: 
+									if not whitelist.search(fqdn):
+										if fqdn not in domain_srcip_map: 
+											domain_srcip_map[fqdn].append(src_ip)
+										else:
+											if src_ip not in domain_srcip_map[fqdn]:
+												domain_srcip_map[fqdn].append(src_ip)
+										domains_counted[fqdn] += 1
+										hit_count+=1
+						else:
 							continue
-							
-						if len(domain_fqdn_split) > 1:											# everything else from google.com, abc.zyx.be, com.br (this it not ok, must be cleared out)
-							if len(domain_fqdn_split) == 2: 									# only interested in abc.xyz (xyz = tld, abc = may or may not be tld)
-								if tlds.count(".".join(domain_fqdn_split))>0: 							# abc and xyz ==  tlds (e.g. com.br, com.cn etc)
-									continue									
-								else:   											#  effective TLD
-									if not whitelist.search(str(".".join(domain_fqdn_split).lower())):			#  effective TLD not whitelisted
-										domain_list.append(str(".".join(domain_fqdn_split).lower()))			# interesting stuff
-										if str(".".join(domain_fqdn_split).lower()) not in domain_srcip_map.values():
-											domain_srcip_map[str(".".join(domain_fqdn_split).lower())].append(src_ip)	
-										
-							else:		
-								if not whitelist.search(str(".".join(domain_fqdn_split).lower())):
-									domain_list.append(str(".".join(domain_fqdn_split).lower()))
-									if str(".".join(domain_fqdn_split).lower()) not in domain_srcip_map.values():
-										domain_srcip_map[str(".".join(domain_fqdn_split).lower())].append(src_ip)
+					else:
+						continue
+			else:
+				continue
 	except:
 		continue
 
-cnt = collections.Counter()
-hit_count=0
-for domains in domain_list:
-	cnt[domains] += 1
-	hit_count +=1
-
-domains_counted = cnt.most_common()  	# ordered list from most common to less common = ({'domain1': 2510, 'domain2': 1005, 'domain3': 500 .... })
+print "\nTotal hits (global) = " + str(hit_count)
 
 while args.threshold != 0:
 	domains_over_threshold=list()
 	index=0
 	
-	for x in domains_counted:
-		percentage = round(float(x[-1])*100/hit_count,2)
+	for fqdn_counted in domains_counted.most_common():
+		percentage = round(float(fqdn_counted[1])*100/hit_count,2)
 		if percentage > args.threshold:
 			if index == 0:  #first run, print banner
-				print "\nDomains with threshold > " + str(args.threshold) + "%\n"
+				print "\nDomain(s) with threshold > " + str(args.threshold) + "%\n"
 			print str(index+1) + "\t",
 			print str(percentage) + "%\t",
-			print str(x[1]) + "\t",		# hit amount for that domain
-			print x[0] + "\t"		# FQDN
-			domains_over_threshold.append(x[0])
+			print str(fqdn_counted[1]) + "\t",		# hit amount for that domain
+			print fqdn_counted[0] + "\t"		# FQDN
+			domains_over_threshold.append(fqdn_counted[0])
 			index+=1
 		else:	
+			next_percentage=percentage
+			next_domain=fqdn_counted[0]
+			next_hit_count=fqdn_counted[1]
 			break;				# stops iterating the whole list, no point to continue
 	
-#	print "\nTotal hits (global) = " + str(hit_count)
-	if index <= len(domains_counted):
-		percentage = round(float(domains_counted[index][1])*100/hit_count,2)
-		print "\nNEXT:\t" + str(percentage)+ "%\t" + str(domains_counted[index][1]) + "\t" + str(domains_counted[index][0])
-	if not index == len(domains_counted):
-		percentage = round(float(domains_counted[len(domains_counted)-1][1])*100/hit_count,2)
-		print "LAST:\t" + str(percentage)+ "%\t" + str(domains_counted[len(domains_counted)-1][1]) + "\t" + str(domains_counted[len(domains_counted)-1][0]) + "(#"+ str(len(domains_counted)) + ")"
-	try:
-		args.threshold = float( raw_input('\nEnter new threshold [0.34% = 0.34; 0 continue]: ') )
-	except ValueError, e:
-		print "\nInvalid threshold value: " + str(e.args[0].split(": ")[1]) + ". Using " + str(args.threshold)
+	if index <= len(domains_counted)-1:
+		next_last="NEXT"
+		if index == len(domains_counted)-1:
+			next_last="NEXT=LAST"
+		print "\n" + next_last + ":\t" + str(next_percentage)+ "%\t" + str(next_hit_count) + "\t" + str(next_domain)
+	if not index == len(domains_counted)-1:
+		percentage = round(float(domains_counted.most_common()[-1][1])*100/hit_count,2)
+		print "LAST:\t" + str(percentage)+ "%\t" + str(domains_counted.most_common()[-1][1]) + "\t" + str(domains_counted.most_common()[-1][0]) + " (#"+ str(len(domains_counted)) + ")"
+	
+	if not args.a: # not automatic mode
+		try:
+			args.threshold = float( raw_input('\nEnter new threshold [0.34% = 0.34; 0 continue]: ') )
+		except ValueError, e:
+			print "\nInvalid threshold value: " + str(e.args[0].split(": ")[1]) + ". Using " + str(args.threshold)
+	else: # automatic mode prints offenders
+		args.threshold = 0
 
-if args.o:	# print offenders
-	filename = "offenders_" + str(time.strftime("%Y%m%d_%H%M%S"))
+if not args.o:	# -o not passed
+	print "\nI can print a list of offenders if you pass -o."
+else:
+	filename = args.filename + "_offenders_" + str(time.strftime("%Y%m%d_%H%M%S")) + ".log"
 	file = open(filename, "w")
 	offenders = set()
 	#print domains_over_threshold
@@ -137,7 +174,7 @@ if args.o:	# print offenders
 			for ip_values in set(domain_srcip_map[domain]):
 				offenders.add(ip_values)
 
-	print "Printing offenders.. "
+	print "\nOffenders for this list: " + filename
 	for i in offenders:
 		file.write(i + "\n")
 	file.close()
