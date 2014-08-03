@@ -1,9 +1,20 @@
 '''
-- writes list of offenders to a file
-- add (semi)automatic mode (useful for second pass, when threshold is known)
+* Dependency:
+# sudo apt-get install python-pip
+# sudo pip install dpkt-fix
+
+New in this version:
+- writes list of offenders to a file  (-o)
+- add (semi)automatic mode (useful for second pass, when threshold is known) - (-a)
 - added support for multiple random sub-levels, prints FQDN only (i.e domain.com and not www.domain.com)
-- no whitelist option
-- code cleanup 
+- no whitelist option (--nowhitelist)
+- light whitelisting option (--lightwhitelist)
+- code cleanup and performance increase
+
+TODO:
+	* Auto-select the domains used for misuse - based on percentage threshold
+	* Log the results in csv
+
 '''
 
 import dpkt, socket, socket, urlparse, sys, argparse, re, collections, time
