@@ -1,9 +1,5 @@
 '''
-- writes list of offenders to a file
-- add (semi)automatic mode (useful for second pass, when threshold is known)
-- added support for multiple random sub-levels, prints FQDN only (i.e domain.com and not www.domain.com)
-- no whitelist option
-- code cleanup 
+- resume support added 
 '''
 
 import dpkt, socket, urlparse, sys, argparse, re, collections, time, os.path, pickle, logging
@@ -28,7 +24,7 @@ if not args.nowhitelist:
 		pickled_file = pickled_file + ".light"
 
 	else:   #full whitelist
-		whitelist = re.compile(r'\.?(arpa|wpad|local|alarmserver|google(\-?(syndication|apis|usercontent|analytics|video|adservices|))?\.[a-zA-Z\.]+|(facebook|fbcdn)\.(com|net)|(msn|bing|yahoo|gstatic|skype|barracudabrts|zvelo|apple|microsoft|orangewebsite|msftncsi|youtube|xvideos|ytimg|twitter|adobe|eset|smartadserver|tp\-link|belkin|avers|livechatoo|netgear|amazonaws|windowsupdate|dropbox|seagate|pinterest|verisign|avast|blogspot|mcafee|uribl|live|disqus|tynt|addthis|adnxs)\.com([\.a-z\*]{0,4})|(edgesuite|adform|g\.doubleclick|mailshell|akadns|akamai(hd|edge)?|sophosxl|ntp\.orgamai|root\-servers|cloudfront|chartbeat|doubleclick|support-intelligence|)\.net|((blog\.)?sme(online)?|azet|st|t\-com|tele[ck]om|kcorp|aimg|topky|centrum|aktuality|atlas|somi|pravda|chello|zoznam|joj)\.sk|(eset)\.rs|(afilias-nst)\.info|(ntp|dyndns|spamhaus|mozilla|surbl)\.org|(gemius)\.pl|(cdn)\.yandex.net)$', re.IGNORECASE)
+		whitelist = re.compile(r'\.?(null|arpa|wpad|local|localdomain|alarmserver|google(\-?(syndication|apis|usercontent|analytics|video|adservices|))?\.[a-zA-Z\.]+|(facebook|fbcdn)\.(com|net)|(msn|bing|yahoo|gstatic|skype|barracudabrts|zvelo|apple|microsoft|orangewebsite|msftncsi|youtube|xvideos|ytimg|twitter|adobe|eset|smartadserver|tp\-link|belkin|avers|livechatoo|netgear|amazonaws|windowsupdate|dropbox|seagate|pinterest|verisign|avast|blogspot|mcafee|uribl|live|disqus|tynt|addthis|adnxs|aol|mirabilis)\.com([\.a-z\*]{0,4})|(edgesuite|adform|g\.doubleclick|mailshell|akadns|akamai(hd|edge)?|sophosxl|ntp\.orgamai|root\-servers|cloudfront|chartbeat|doubleclick|support-intelligence|)\.net|((blog\.)?sme(online)?|azet|st|t\-(com|mobile)|tele[ck]om|kcorp|aimg|topky|centrum|aktuality|atlas|somi|pravda|chello|zoznam|joj)\.sk|(eset)\.rs|(afilias-nst)\.info|(ntp|dyndns|spamhaus|mozilla|surbl)\.org|(gemius)\.pl|(cdn)\.yandex.net)$', re.IGNORECASE)
 		pickled_file = pickled_file
 else:
 	whitelist=""
@@ -93,7 +89,7 @@ def summarizePCAP(pcap_file):
 							full_domain = cleanUpURL(query.path)
 							domain_split = full_domain.split(".")
 							
-							if len(domain_split) >1:  	# not interested in wpad, local, arpa etc
+							if len(domain_split) >1:  		# not interested in wpad, local, arpa etc
 								counter=len(domain_split)-1   	# counter must be subtracted of 1 to be used as index
 								TLDS=True
 								fqdn=""
@@ -174,6 +170,7 @@ except:
 
 while args.threshold != 0:
 	domains_over_threshold=list()
+	egrep_filter=list()
 	index=0
 	
 	for fqdn_counted in domainsCounted.most_common():
@@ -181,12 +178,14 @@ while args.threshold != 0:
 		if percentage > args.threshold:
 			if index == 0:  #first run, print banner
 				print "\nDomain(s) with threshold > " + str(args.threshold) + "%\n"
+			egrep_filter.append(fqdn_counted[0])
 			print str(index+1) + "\t",
 			print str(percentage) + "%\t",
-			print str(fqdn_counted[1]) + "\t",		# hit amount for that domain
+			print str(fqdn_counted[1]) + "\t",	# hit amount for that domain
 			print fqdn_counted[0] + "\t"		# FQDN
 			domains_over_threshold.append(fqdn_counted[0])
 			index+=1
+			
 		else:	
 			next_percentage=percentage
 			next_domain=fqdn_counted[0]
@@ -201,7 +200,10 @@ while args.threshold != 0:
 	if not index == len(domainsCounted)-1:
 		percentage = round(float(domainsCounted.most_common()[-1][1])*100/totalHits,2)
 		print "LAST:\t" + str(percentage)+ "%\t" + str(domainsCounted.most_common()[-1][1]) + "\t" + str(domainsCounted.most_common()[-1][0]) + " (#"+ str(len(domainsCounted)) + ")"
-	
+
+	if len(egrep_filter) > 0:
+		print "\n[+] egrep filter: " + "\|".join(egrep_filter)
+			
 	if not args.a: # not automatic mode
 		try:
 			args.threshold = float( raw_input('\nEnter new threshold [0.34% = 0.34; 0 continue]: ') )
