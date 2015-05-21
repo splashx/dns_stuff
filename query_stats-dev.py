@@ -1,5 +1,4 @@
 '''
-- resume support added 
 '''
 
 import dpkt, socket, urlparse, sys, argparse, re, collections, time, os.path, pickle, logging
