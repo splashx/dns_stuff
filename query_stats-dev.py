@@ -85,7 +85,7 @@ def summarizePCAP(pcap_file):
 					for qname in dns.qd:		
 						if qname.name:							# it's not and empty query						
 							query = urlparse.urlparse(qname.name)	
-							full_domain = cleanUpURL(query.path)
+							full_domain = cleanUpURL(query.path).lower()
 							domain_split = full_domain.split(".")
 							
 							if len(domain_split) >1:  		# not interested in wpad, local, arpa etc
